@@ -8,7 +8,7 @@ CC = gcc
 
 all: $(OBJS)
 
-$(BDIR)/%: %.c
+$(BDIR)/sensor: sensor.c
 	@mkdir -p $(BDIR)
 	$(CC) -o $@ $<
 
