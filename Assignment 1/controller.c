@@ -50,11 +50,13 @@ struct device_info
 {
     pid_t pid;
     char name[MAX_NAME_LENGTH];
+    char device_type;
     int threshold;
 };
 
 void child_handler(void);
 int get_device_index(pid_t pid, struct device_info *devices, int size);
+int get_actuator_index(struct device_info *devices, int size);
 
 void parent_handler(void);
 
@@ -132,11 +134,13 @@ void child_handler(void)
         {
             devices[current_devices_index].pid = rx_data.pid;
             strncpy(devices[current_devices_index].name, rx_data.name, sizeof(devices[current_devices_index].name));
+            devices[current_devices_index].device_type = rx_data.device_type;
             devices[current_devices_index].threshold = rx_data.threshold;
             printf("Device with PID=%d is now registered!\n", rx_data.pid);
             current_devices_index++;
 
-            // Construct and send an acknowledgement message to device
+            // Constructs and sends an acknowledgement message to device
+            memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = rx_data.pid;
             strncpy(tx_data.data, "ack", sizeof(tx_data.data));
 
@@ -153,6 +157,27 @@ void child_handler(void)
 
         if (rx_data.sensor_reading >= devices[received_device_index].threshold)
         {
+            // Find an actuator
+            int actuator_index = get_actuator_index(devices, MAX_DEVICES);
+
+            if (actuator_index == -1)
+            {
+                printf("There are no actuators available at this time.\n");
+                continue;
+            }
+
+            // Constructs and sends a command message to an actuator
+            memset((void *)&tx_data, 0, sizeof(tx_data));
+            tx_data.type = devices[actuator_index].pid;
+            strncpy(tx_data.data, "command", sizeof(tx_data.data));
+
+            printf("Sending command to actuator with PID=%d\n", (int)tx_data.type);
+            if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+            {
+                fprintf(stderr, "msgsnd failed\n");
+                exit(EXIT_FAILURE);
+            }
+
             // Raises signal sent to parent process
         }
     }
@@ -165,6 +190,22 @@ int get_device_index(pid_t pid, struct device_info *devices, int size)
     for (int i=0; i<size; i++)
     {
         if (devices[i].pid == pid)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    return index;
+}
+
+int get_actuator_index(struct device_info *devices, int size)
+{
+    int index = -1;
+
+    for (int i=0; i<size; i++)
+    {
+        if (devices[i].device_type == DEVICE_TYPE_ACTUATOR)
         {
             index = i;
             break;

@@ -1,6 +1,6 @@
 /*
  * SYSC 4001 Assignment 1
- * 
+ *
  * File: sensor.c
  * Author: Brandon To
  * Student #: 100874049
@@ -11,7 +11,7 @@
  * results to the Controller via the message queue. If a threshold
  * crossing is observed, the Controller needs to take the appropriate
  * action. See description of the Controller in the controller.c file.
- * 
+ *
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -41,10 +41,10 @@ int main(int argc, char* argv[])
     int running = 1;
     struct timeval t1, t2;
 
-    struct sensor_controller_struct tx_data;
-    struct controller_sensor_struct rx_data;
-    int tx_data_size = sizeof(struct sensor_controller_struct) - sizeof(long);
-    int rx_data_size = sizeof(struct controller_sensor_struct) - sizeof(long);
+    struct update_struct tx_data;
+    struct message_struct rx_data;
+    int tx_data_size = sizeof(struct update_struct) - sizeof(long);
+    int rx_data_size = sizeof(struct message_struct) - sizeof(long);
 
     if (argc < 2)
     {
@@ -81,8 +81,9 @@ int main(int argc, char* argv[])
     }
 
     // Initial message to send
-    tx_data.type = TYPE_SENSOR_CONTROLLER;
+    tx_data.type = TO_CONTROLLER;
     strncpy(tx_data.name, name, sizeof(tx_data.name));
+    tx_data.device_type = DEVICE_TYPE_SENSOR;
     tx_data.threshold = threshold;
     tx_data.pid = pid;
 
@@ -134,9 +135,9 @@ int main(int argc, char* argv[])
                 running = 0;
             }
 
-            // Constructs and send update message to controller
+            // Constructs and sends update message to controller
             memset((void *)&tx_data, 0, sizeof(tx_data));
-            tx_data.type = TYPE_SENSOR_CONTROLLER;
+            tx_data.type = TO_CONTROLLER;
             tx_data.sensor_reading = sensor_reading;
             tx_data.pid = pid;
 
