@@ -17,6 +17,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <errno.h>
+
+#include <sys/msg.h>
 
 #include "message_queue.h"
 
@@ -26,14 +29,20 @@
 int main(int argc, char* argv[])
 {
     pid_t pid = getpid();
+    int msgid;
+
     char *name;
     int threshold = DEFAULT_THRESHOLD;
     int max_reading = DEFAULT_MAX_READING;
     int sensor_reading;
+
     int running = 1;
     struct timeval t1, t2;
-    struct sensor_controller_struct tx_struct;
-    struct controller_sensor_struct rx_struct;
+
+    struct sensor_controller_struct tx_data;
+    struct controller_sensor_struct rx_data;
+    int tx_data_size = sizeof(struct sensor_controller_struct) - sizeof(long);
+    int rx_data_size = sizeof(struct controller_sensor_struct) - sizeof(long);
 
     if (argc < 2)
     {
@@ -59,11 +68,41 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    // Initial struct
-    tx_struct.type = TYPE_SENSOR_CONTROLLER;
-    strncpy(tx_struct.name, name, sizeof(tx_struct.name));
-    tx_struct.threshold = threshold;
-    tx_struct.pid = pid;
+    // Creates a message queue
+    msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666| IPC_CREAT);
+    if (msgid == -1)
+    {
+        fprintf(stderr, "msgget failed with error: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    // Initial message to send
+    tx_data.type = TYPE_SENSOR_CONTROLLER;
+    strncpy(tx_data.name, name, sizeof(tx_data.name));
+    tx_data.threshold = threshold;
+    tx_data.pid = pid;
+
+    // Send initial message to controller
+    if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+    {
+        fprintf(stderr, "msgsnd failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Receive acknowledgement message from controller
+    if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
+                TYPE_CONTROLLER_SENSOR, 0) == -1)
+    {
+        fprintf(stderr, "msgrcv failed with error: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    // Check if the message received is an ack
+    if (strncmp(rx_data.data, "ack", 3) != 0)
+    {
+        fprintf(stderr, "Expected ack message but received non-ack message\n");
+        exit(EXIT_FAILURE);
+    }
 
     // Initilize random number generator
     srand(time(NULL));

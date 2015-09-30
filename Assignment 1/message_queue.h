@@ -16,10 +16,13 @@
 #define TYPE_SENSOR_CONTROLLER 1
 #define TYPE_CONTROLLER_SENSOR 2
 
+#define MAX_NAME_LENGTH 64
+#define MAX_DATA_LENGTH 512
+
 struct sensor_controller_struct
 {
     long type;
-    char name[BUFSIZ];
+    char name[MAX_NAME_LENGTH];
     int threshold;
     int sensor_reading;
     pid_t pid;
@@ -28,5 +31,5 @@ struct sensor_controller_struct
 struct controller_sensor_struct
 {
     long type;
-    char data[BUFSIZ];
+    char data[MAX_DATA_LENGTH];
 };
