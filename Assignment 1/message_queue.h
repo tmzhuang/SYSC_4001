@@ -13,22 +13,26 @@
 
 #define MESSAGE_QUEUE_ID 1234
 
-#define TYPE_SENSOR_CONTROLLER 1
+#define TO_CONTROLLER 1
 //#define TYPE_CONTROLLER_SENSOR 2
 
 #define MAX_NAME_LENGTH 64
 #define MAX_DATA_LENGTH 512
 
-struct sensor_controller_struct
+#define DEVICE_TYPE_SENSOR 1
+#define DEVICE_TYPE_ACTUATOR 2
+
+struct update_struct
 {
     long type;
     char name[MAX_NAME_LENGTH];
+    char device_type;
     int threshold;
     int sensor_reading;
     pid_t pid;
 };
 
-struct controller_sensor_struct
+struct message_struct
 {
     long type;
     char data[MAX_DATA_LENGTH];

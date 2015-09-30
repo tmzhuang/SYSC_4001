@@ -101,10 +101,10 @@ void child_handler(void)
     struct device_info devices[MAX_DEVICES];
     int current_devices_index = 0;
 
-    struct sensor_controller_struct rx_data;
-    struct controller_sensor_struct tx_data;
-    int tx_data_size = sizeof(struct sensor_controller_struct) - sizeof(long);
-    int rx_data_size = sizeof(struct controller_sensor_struct) - sizeof(long);
+    struct update_struct rx_data;
+    struct message_struct tx_data;
+    int tx_data_size = sizeof(struct update_struct) - sizeof(long);
+    int rx_data_size = sizeof(struct message_struct) - sizeof(long);
 
     memset(devices, 0, sizeof(devices));
 
@@ -120,7 +120,7 @@ void child_handler(void)
     {
         // Block until a message is received
         if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
-                    0, 0) == -1)
+                    TO_CONTROLLER, 0) == -1)
         {
             fprintf(stderr, "msgrcv failed with error: %d\n", errno);
             exit(EXIT_FAILURE);
