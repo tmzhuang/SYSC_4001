@@ -70,6 +70,8 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
+    printf("Device starting. PID=%d\n", pid);
+
     // Creates a message queue
     msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666 | IPC_CREAT);
     if (msgid == -1)

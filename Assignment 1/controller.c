@@ -80,6 +80,7 @@ int main(int argc, char* argv[])
     {
     case -1:
         fprintf(stderr, "fork failed\n");
+        exit(EXIT_FAILURE);
     case 0:
         // Child process
         child_handler();
@@ -125,18 +126,29 @@ void child_handler(void)
             exit(EXIT_FAILURE);
         }
 
-        if (!is_device_registered(rx_data.pid, devices, sizeof(devices)))
+        // Register device if it hasn't been registered yet
+        if (!is_device_registered(rx_data.pid, devices, MAX_DEVICES))
         {
             devices[devices_index].pid = rx_data.pid;
             strncpy(devices[devices_index].name, rx_data.name, sizeof(devices[devices_index].name));
             devices[devices_index].threshold = rx_data.threshold;
             printf("Device with PID=%d is now registered!\n", rx_data.pid);
             devices_index++;
+
+            // Construct and send an acknowledgement message to device
+            tx_data.type = TYPE_CONTROLLER_SENSOR;
+            strncpy(tx_data.data, "ack", sizeof(tx_data.data));
+
+            if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+            {
+                fprintf(stderr, "msgsnd failed\n");
+                exit(EXIT_FAILURE);
+            }
         }
     }
 }
 
-int is_device_registered(pid_t pid, struct device_info *devices, int size)
+int is_device_registered(pid_t pid, struct device_info devices[], int size)
 {
     int result = 0;
 
