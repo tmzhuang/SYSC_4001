@@ -54,7 +54,7 @@ struct device_info
 };
 
 void child_handler(void);
-int is_device_registered(pid_t pid, struct device_info *devices, int size);
+int get_device_index(pid_t pid, struct device_info *devices, int size);
 
 void parent_handler(void);
 
@@ -99,7 +99,7 @@ void child_handler(void)
     int msgid;
 
     struct device_info devices[MAX_DEVICES];
-    int devices_index = 0;
+    int current_devices_index = 0;
 
     struct sensor_controller_struct rx_data;
     struct controller_sensor_struct tx_data;
@@ -127,16 +127,17 @@ void child_handler(void)
         }
 
         // Register device if it hasn't been registered yet
-        if (!is_device_registered(rx_data.pid, devices, MAX_DEVICES))
+        int received_device_index = get_device_index(rx_data.pid, devices, MAX_DEVICES);
+        if (received_device_index == -1)
         {
-            devices[devices_index].pid = rx_data.pid;
-            strncpy(devices[devices_index].name, rx_data.name, sizeof(devices[devices_index].name));
-            devices[devices_index].threshold = rx_data.threshold;
+            devices[current_devices_index].pid = rx_data.pid;
+            strncpy(devices[current_devices_index].name, rx_data.name, sizeof(devices[current_devices_index].name));
+            devices[current_devices_index].threshold = rx_data.threshold;
             printf("Device with PID=%d is now registered!\n", rx_data.pid);
-            devices_index++;
+            current_devices_index++;
 
             // Construct and send an acknowledgement message to device
-            tx_data.type = TYPE_CONTROLLER_SENSOR;
+            tx_data.type = rx_data.pid;
             strncpy(tx_data.data, "ack", sizeof(tx_data.data));
 
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
@@ -144,24 +145,33 @@ void child_handler(void)
                 fprintf(stderr, "msgsnd failed\n");
                 exit(EXIT_FAILURE);
             }
+
+            continue;
+        }
+
+        printf("Received reading of %d from PID=%d\n", rx_data.sensor_reading, rx_data.pid);
+
+        if (rx_data.sensor_reading >= devices[received_device_index].threshold)
+        {
+            // Raises signal sent to parent process
         }
     }
 }
 
-int is_device_registered(pid_t pid, struct device_info devices[], int size)
+int get_device_index(pid_t pid, struct device_info *devices, int size)
 {
-    int result = 0;
+    int index = -1;
 
     for (int i=0; i<size; i++)
     {
         if (devices[i].pid == pid)
         {
-            result = 1;
+            index = i;
             break;
         }
     }
 
-    return result;
+    return index;
 }
 
 void parent_handler(void)

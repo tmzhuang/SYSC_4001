@@ -87,6 +87,7 @@ int main(int argc, char* argv[])
     tx_data.pid = pid;
 
     // Send initial message to controller
+    printf("Attempting to establish connection with controller...\n");
     if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
     {
         fprintf(stderr, "msgsnd failed\n");
@@ -95,11 +96,12 @@ int main(int argc, char* argv[])
 
     // Receive acknowledgement message from controller
     if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
-                TYPE_CONTROLLER_SENSOR, 0) == -1)
+                pid, 0) == -1)
     {
         fprintf(stderr, "msgrcv failed with error: %d\n", errno);
         exit(EXIT_FAILURE);
     }
+    printf("Connection establish.\n");
 
     // Check if the message received is an ack
     if (strncmp(rx_data.data, "ack", 3) != 0)
@@ -130,6 +132,18 @@ int main(int argc, char* argv[])
             {
                 printf("Sensor reading exceeded THRESHOLD(%d)!\n", threshold);
                 running = 0;
+            }
+
+            // Constructs and send update message to controller
+            memset((void *)&tx_data, 0, sizeof(tx_data));
+            tx_data.type = TYPE_SENSOR_CONTROLLER;
+            tx_data.sensor_reading = sensor_reading;
+            tx_data.pid = pid;
+
+            if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+            {
+                fprintf(stderr, "msgsnd failed\n");
+                exit(EXIT_FAILURE);
             }
 
             // Make note of current time
