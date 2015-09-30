@@ -18,7 +18,9 @@
 #include <string.h>
 #include <time.h>
 #include <errno.h>
+#include <unistd.h>
 
+#include <sys/time.h>
 #include <sys/msg.h>
 
 #include "message_queue.h"
@@ -69,7 +71,7 @@ int main(int argc, char* argv[])
     }
 
     // Creates a message queue
-    msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666| IPC_CREAT);
+    msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666 | IPC_CREAT);
     if (msgid == -1)
     {
         fprintf(stderr, "msgget failed with error: %d\n", errno);

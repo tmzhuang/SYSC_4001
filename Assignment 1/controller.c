@@ -37,12 +37,25 @@
 #include <string.h>
 #include <time.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include <sys/msg.h>
+#include <sys/wait.h>
 
 #include "message_queue.h"
 
+#define MAX_DEVICES 256
+
+struct device_info
+{
+    pid_t pid;
+    char name[MAX_NAME_LENGTH];
+    int threshold;
+};
+
 void child_handler(void);
+int is_device_registered(pid_t pid, struct device_info *devices, int size);
+
 void parent_handler(void);
 
 int main(int argc, char* argv[])
@@ -62,6 +75,7 @@ int main(int argc, char* argv[])
     // Fork the process into child and parent process
     pid = fork();
 
+    // Switch according to the pid returned from fork()
     switch (pid)
     {
     case -1:
@@ -69,11 +83,9 @@ int main(int argc, char* argv[])
     case 0:
         // Child process
         child_handler();
-        printf("We're in the child process!\n");
         break;
     default:
         // Parent process
-        printf("We're in the parent process!\n");
         parent_handler();
         break;
     }
@@ -83,14 +95,20 @@ int main(int argc, char* argv[])
 
 void child_handler(void)
 {
-    /*struct sensor_controller_struct rx_data;
+    int msgid;
+
+    struct device_info devices[MAX_DEVICES];
+    int devices_index = 0;
+
+    struct sensor_controller_struct rx_data;
     struct controller_sensor_struct tx_data;
     int tx_data_size = sizeof(struct sensor_controller_struct) - sizeof(long);
     int rx_data_size = sizeof(struct controller_sensor_struct) - sizeof(long);
 
+    memset(devices, 0, sizeof(devices));
 
     // Creates a message queue
-    msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666| IPC_CREAT);
+    msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666 | IPC_CREAT);
     if (msgid == -1)
     {
         fprintf(stderr, "msgget failed with error: %d\n", errno);
@@ -99,15 +117,43 @@ void child_handler(void)
 
     while (1)
     {
-        if (msgrcv)
+        // Block until a message is received
+        if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
+                    0, 0) == -1)
         {
-
+            fprintf(stderr, "msgrcv failed with error: %d\n", errno);
+            exit(EXIT_FAILURE);
         }
 
-    }*/
+        if (!is_device_registered(rx_data.pid, devices, sizeof(devices)))
+        {
+            devices[devices_index].pid = rx_data.pid;
+            strncpy(devices[devices_index].name, rx_data.name, sizeof(devices[devices_index].name));
+            devices[devices_index].threshold = rx_data.threshold;
+            printf("Device with PID=%d is now registered!\n", rx_data.pid);
+            devices_index++;
+        }
+    }
+}
+
+int is_device_registered(pid_t pid, struct device_info *devices, int size)
+{
+    int result = 0;
+
+    for (int i=0; i<size; i++)
+    {
+        if (devices[i].pid == pid)
+        {
+            result = 1;
+            break;
+        }
+    }
+
+    return result;
 }
 
 void parent_handler(void)
 {
-
+    while(wait(NULL)>0);
 }
+
