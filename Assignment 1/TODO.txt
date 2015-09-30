@@ -1,0 +1,1 @@
+If an Actuator is terminated, we must remove it from the list of Actuators.
