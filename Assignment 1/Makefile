@@ -8,7 +8,7 @@ CC = gcc
 
 all: $(OBJS)
 
-$(BDIR)/sensor: sensor.c
+$(BDIR)/sensor: sensor.c message_queue.h
 	@mkdir -p $(BDIR)
 	$(CC) -o $@ $<
 
