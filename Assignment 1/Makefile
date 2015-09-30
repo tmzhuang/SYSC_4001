@@ -1,6 +1,6 @@
 BDIR = bin
 
-_OBJS = sensor controller
+_OBJS = sensor controller actuator
 
 OBJS = $(patsubst %,$(BDIR)/%,$(_OBJS))
 
@@ -15,6 +15,10 @@ $(BDIR)/sensor: sensor.c message_queue.h
 	$(CC) $(CFLAGS) -o $@ $<
 
 $(BDIR)/controller: controller.c message_queue.h
+	@mkdir -p $(BDIR)
+	$(CC) $(CFLAGS) -o $@ $<
+
+$(BDIR)/actuator: actuator.c message_queue.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 
