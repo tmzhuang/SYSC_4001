@@ -82,7 +82,24 @@ int main(int argc, char* argv[])
 
     name = argv[1];
 
-    printf("Controller starting. PID=%d\n", pid);
+    printf("Controller starting.\n");
+
+    // Creates a message queue
+    int msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666 | IPC_CREAT);
+    if (msgid == -1)
+    {
+        fprintf(stderr, "msgget failed with error: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("[CONTROLLER] Flushing message queue\n");
+
+    // Flush message queue
+    if (msgctl(msgid, IPC_RMID, 0) == -1)
+    {
+        fprintf(stderr, "msgctl failed with error: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
 
     // Fork the process into child and parent process
     pid = fork();
@@ -108,11 +125,14 @@ int main(int argc, char* argv[])
 
 void child_handler(void)
 {
+    pid_t pid = getpid();
     pid_t ppid = getppid();
     int msgid;
 
     struct device_info devices[MAX_DEVICES];
     int current_devices_index = 0;
+
+    int result;
 
     struct message_struct rx_data;
     struct message_struct tx_data;
@@ -120,6 +140,8 @@ void child_handler(void)
     int rx_data_size = sizeof(struct message_struct) - sizeof(long);
 
     memset(devices, 0, sizeof(devices));
+
+    printf("[CHILD] Started with PID=%d\n", pid);
 
     // Creates a message queue
     msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666 | IPC_CREAT);
@@ -129,18 +151,22 @@ void child_handler(void)
         exit(EXIT_FAILURE);
     }
 
+    printf("[CHILD] Ready to receive messages\n");
+
     while (1)
     {
         // Block until a message is received
         if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
                     TO_CONTROLLER, 0) == -1)
         {
-            fprintf(stderr, "[CHILD] msgrcv failed with error: %d\n", errno);
+            fprintf(stderr, "PID=%d [CHILD] msgrcv failed with error: %d\n", pid, errno);
+            fprintf(stderr, "%s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
 
         // Register device if it hasn't been registered yet
         int received_device_index = get_device_index(rx_data.pid, devices, MAX_DEVICES);
+        printf("received_device_index = %d\n", received_device_index);
         if (received_device_index == -1)
         {
             devices[current_devices_index].pid = rx_data.pid;
@@ -155,6 +181,7 @@ void child_handler(void)
             tx_data.type = rx_data.pid;
             strncpy(tx_data.data, "ack", sizeof(tx_data.data));
 
+            printf("[CHILD] Sending ack to device with PID=%d\n", rx_data.pid);
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
                 fprintf(stderr, "[CHILD] msgsnd failed\n");
@@ -192,6 +219,7 @@ void child_handler(void)
             // Constructs and sends an update message to the parent
             memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = ppid;
+            strncpy(tx_data.name, devices[received_device_index].name, sizeof(tx_data.name));
             tx_data.threshold = devices[received_device_index].threshold;
             tx_data.sensor_reading = rx_data.sensor_reading;
             tx_data.pid = rx_data.pid;
@@ -250,14 +278,16 @@ void parent_handler(void)
     int result;
 
     struct message_struct rx_data;
+    struct message_struct tx_data;
     int rx_data_size = sizeof(struct message_struct) - sizeof(long);
+    int tx_data_size = sizeof(struct message_struct) - sizeof(long);
 
     struct sigaction sa;
     memset((void *)&sa, 0, sizeof(sa));
     sa.sa_handler = &get_message;
     sigaction(SIGUSR1, &sa, 0);
 
-    //printf("[PARENT] PID=%d\n", pid);
+    printf("[Parent] Started with PID=%d\n", pid);
 
     // Creates a message queue
     msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666 | IPC_CREAT);
@@ -288,6 +318,8 @@ void parent_handler(void)
         exit(EXIT_FAILURE);
     }
 
+    printf("[PARENT] Connected to Cloud via FIFO\n");
+
     while (1)
     {
         if (get_message_flag)
@@ -302,6 +334,18 @@ void parent_handler(void)
 
             printf("[PARENT] Received update from child. Sensor: pid=%d, threshold=%d, reading=%d, command='%s'\n",
                     rx_data.pid, rx_data.threshold, rx_data.sensor_reading, rx_data.data);
+
+            // Constructs and sends update to Cloud process
+            strncpy(tx_data.name, rx_data.name, sizeof(tx_data.name));
+            tx_data.threshold = rx_data.threshold;
+            tx_data.sensor_reading = rx_data.sensor_reading;
+            tx_data.pid = rx_data.pid;
+
+            if (write(fifo_fd, (void *)&tx_data, tx_data_size) == -1)
+            {
+                fprintf(stderr, "[PARENT] write failed with error: %d\n", errno);
+                exit(EXIT_FAILURE);
+            }
 
             get_message_flag = 0;
         }

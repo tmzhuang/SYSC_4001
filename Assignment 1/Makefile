@@ -22,7 +22,7 @@ $(BDIR)/actuator: actuator.c message_queue.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 
-$(BDIR)/cloud: cloud.c fifo.h
+$(BDIR)/cloud: cloud.c message_queue.h fifo.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 

@@ -102,7 +102,6 @@ int main(int argc, char* argv[])
         fprintf(stderr, "msgrcv failed with error: %d\n", errno);
         exit(EXIT_FAILURE);
     }
-    printf("Connection establish.\n");
 
     // Check if the message received is an ack
     if (strncmp(rx_data.data, "ack", 3) != 0)
@@ -110,6 +109,7 @@ int main(int argc, char* argv[])
         fprintf(stderr, "Expected ack message but received non-ack message\n");
         exit(EXIT_FAILURE);
     }
+    printf("Connection establish.\n");
 
     // Initilize random number generator
     srand(time(NULL));
@@ -127,7 +127,7 @@ int main(int argc, char* argv[])
         {
             // Generate a random number between 0 and MAX_READING
             sensor_reading = rand()%(max_reading+1);
-            printf("%d\n", sensor_reading);
+            printf("Sensor reading = %d\n", sensor_reading);
 
             if (sensor_reading >= threshold)
             {
@@ -152,8 +152,8 @@ int main(int argc, char* argv[])
                         pid, IPC_NOWAIT);
             if (result == -1)
             {
-                // Error code 42 corresponds to no message received
-                if (errno != 42)
+                // Error code ENOMSG(42) corresponds to no message received
+                if (errno != ENOMSG)
                 {
                     fprintf(stderr, "msgrcv failed with error: %d\n", errno);
                     exit(EXIT_FAILURE);

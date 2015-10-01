@@ -78,7 +78,6 @@ int main(int argc, char* argv[])
         fprintf(stderr, "msgrcv failed with error: %d\n", errno);
         exit(EXIT_FAILURE);
     }
-    printf("Connection establish.\n");
 
     // Check if the message received is an ack
     if (strncmp(rx_data.data, "ack", 3) != 0)
@@ -86,6 +85,7 @@ int main(int argc, char* argv[])
         fprintf(stderr, "Expected ack message but received non-ack message\n");
         exit(EXIT_FAILURE);
     }
+    printf("Connection establish.\n");
 
     // Make note of current time
     gettimeofday(&t1, NULL);

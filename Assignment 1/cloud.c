@@ -32,6 +32,7 @@
 #include <sys/stat.h>
 
 #include "fifo.h"
+#include "message_queue.h"
 
 int main(int argc, char* argv[])
 {
@@ -44,6 +45,9 @@ int main(int argc, char* argv[])
     struct timeval t1, t2;
 
     int fifo_fd;
+    int bytes_read = 0;
+
+    struct message_struct rx_data;
 
     if (argc < 2)
     {
@@ -58,7 +62,7 @@ int main(int argc, char* argv[])
     // Check for existance of fifo by attempting to access it
     if (access(FIFO_NAME, F_OK) == -1)
     {
-        // Create the fifo is it does not exist
+        // Create the fifo if it does not exist
         result = mkfifo(FIFO_NAME, 0777);
         if (result != 0)
         {
@@ -75,9 +79,20 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
+    printf("Connected to Controller via FIFO\n");
+
     while (running)
     {
+        // Receive update from Controller
+        if((bytes_read = read(fifo_fd, (void *)&rx_data,
+                        sizeof(rx_data))) == -1)
+        {
+            fprintf(stderr, "read failed with error: %d\n", errno);
+            exit(EXIT_FAILURE);
+        }
 
+        printf("Received update from Controller. Sensor: pid=%d, name='%s', threshold=%d, reading=%d\n",
+                rx_data.pid, rx_data.name, rx_data.threshold, rx_data.sensor_reading);
     }
 
     close(fifo_fd);
