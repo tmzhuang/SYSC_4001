@@ -14,7 +14,7 @@ $(BDIR)/sensor: sensor.c message_queue.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 
-$(BDIR)/controller: controller.c message_queue.h
+$(BDIR)/controller: controller.c message_queue.h fifo.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 
@@ -22,7 +22,7 @@ $(BDIR)/actuator: actuator.c message_queue.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 
-$(BDIR)/cloud: cloud.c
+$(BDIR)/cloud: cloud.c fifo.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 

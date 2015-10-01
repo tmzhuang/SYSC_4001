@@ -1,6 +1,6 @@
 /*
  * SYSC 4001 Assignment 1
- * 
+ *
  * File: message_queue.h
  * Author: Brandon To
  * Student #: 100874049
@@ -8,7 +8,7 @@
  *
  * Description:
  * Data related to message queue that is common to multiple processes.
- * 
+ *
  */
 
 #define MESSAGE_QUEUE_ID 1234

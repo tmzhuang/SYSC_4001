@@ -39,12 +39,15 @@
 #include <errno.h>
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 
 #include <sys/msg.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 
 #include "message_queue.h"
+#include "fifo.h"
 
 #define MAX_DEVICES 256
 
@@ -78,6 +81,8 @@ int main(int argc, char* argv[])
     }
 
     name = argv[1];
+
+    printf("Controller starting. PID=%d\n", pid);
 
     // Fork the process into child and parent process
     pid = fork();
@@ -241,6 +246,8 @@ void parent_handler(void)
 {
     pid_t pid = getpid();
     int msgid;
+    int fifo_fd;
+    int result;
 
     struct message_struct rx_data;
     int rx_data_size = sizeof(struct message_struct) - sizeof(long);
@@ -257,6 +264,27 @@ void parent_handler(void)
     if (msgid == -1)
     {
         fprintf(stderr, "[PARENT] msgget failed with error: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    // Check for existance of fifo by attempting to access it
+    if (access(FIFO_NAME, F_OK) == -1)
+    {
+        // Create the fifo is it does not exist
+        result = mkfifo(FIFO_NAME, 0777);
+        if (result != 0)
+        {
+            fprintf(stderr, "Could not create fifo %s\n", FIFO_NAME);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // Opens the writing end of the fifo
+    fifo_fd = open(FIFO_NAME, O_WRONLY);
+    if (fifo_fd == -1)
+    {
+        fprintf(stderr, "open failed with error: %d\n", errno);
+        fprintf(stderr, "%s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
@@ -278,7 +306,8 @@ void parent_handler(void)
             get_message_flag = 0;
         }
     }
-    //while(wait(NULL)>0);
+
+    close(fifo_fd);
 }
 
 // Signal handler for SIGUSR1
