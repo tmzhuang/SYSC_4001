@@ -22,7 +22,7 @@
 #define DEVICE_TYPE_SENSOR 1
 #define DEVICE_TYPE_ACTUATOR 2
 
-struct update_struct
+struct message_struct
 {
     long type;
     char name[MAX_NAME_LENGTH];
@@ -30,10 +30,6 @@ struct update_struct
     int threshold;
     int sensor_reading;
     pid_t pid;
-};
-
-struct message_struct
-{
-    long type;
     char data[MAX_DATA_LENGTH];
 };
+

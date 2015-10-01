@@ -41,9 +41,9 @@ int main(int argc, char* argv[])
     int running = 1;
     struct timeval t1, t2;
 
-    struct update_struct tx_data;
+    struct message_struct tx_data;
     struct message_struct rx_data;
-    int tx_data_size = sizeof(struct update_struct) - sizeof(long);
+    int tx_data_size = sizeof(struct message_struct) - sizeof(long);
     int rx_data_size = sizeof(struct message_struct) - sizeof(long);
 
     if (argc < 2)
@@ -145,6 +145,28 @@ int main(int argc, char* argv[])
             {
                 fprintf(stderr, "msgsnd failed\n");
                 exit(EXIT_FAILURE);
+            }
+
+            // Poll for stop message
+            int result = msgrcv(msgid, (void *)&rx_data, rx_data_size,
+                        pid, IPC_NOWAIT);
+            if (result == -1)
+            {
+                // Error code 42 corresponds to no message received
+                if (errno != 42)
+                {
+                    fprintf(stderr, "msgrcv failed with error: %d\n", errno);
+                    exit(EXIT_FAILURE);
+                }
+            }
+            else if (result > 0)
+            {
+                // If a stop messge is received, stop the device
+                if (strncmp(rx_data.data, "stop", 3) == 0)
+                {
+                    printf("Received stop command from controller... stopping device.\n");
+                    break;
+                }
             }
 
             // Make note of current time

@@ -98,14 +98,15 @@ int main(int argc, char* argv[])
 
 void child_handler(void)
 {
+    pid_t ppid = getppid();
     int msgid;
 
     struct device_info devices[MAX_DEVICES];
     int current_devices_index = 0;
 
-    struct update_struct rx_data;
+    struct message_struct rx_data;
     struct message_struct tx_data;
-    int tx_data_size = sizeof(struct update_struct) - sizeof(long);
+    int tx_data_size = sizeof(struct message_struct) - sizeof(long);
     int rx_data_size = sizeof(struct message_struct) - sizeof(long);
 
     memset(devices, 0, sizeof(devices));
@@ -114,7 +115,7 @@ void child_handler(void)
     msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666 | IPC_CREAT);
     if (msgid == -1)
     {
-        fprintf(stderr, "msgget failed with error: %d\n", errno);
+        fprintf(stderr, "[CHILD] msgget failed with error: %d\n", errno);
         exit(EXIT_FAILURE);
     }
 
@@ -124,7 +125,7 @@ void child_handler(void)
         if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
                     TO_CONTROLLER, 0) == -1)
         {
-            fprintf(stderr, "msgrcv failed with error: %d\n", errno);
+            fprintf(stderr, "[CHILD] msgrcv failed with error: %d\n", errno);
             exit(EXIT_FAILURE);
         }
 
@@ -136,7 +137,7 @@ void child_handler(void)
             strncpy(devices[current_devices_index].name, rx_data.name, sizeof(devices[current_devices_index].name));
             devices[current_devices_index].device_type = rx_data.device_type;
             devices[current_devices_index].threshold = rx_data.threshold;
-            printf("Device with PID=%d is now registered!\n", rx_data.pid);
+            printf("[CHILD] Device with PID=%d is now registered!\n", rx_data.pid);
             current_devices_index++;
 
             // Constructs and sends an acknowledgement message to device
@@ -146,14 +147,14 @@ void child_handler(void)
 
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
-                fprintf(stderr, "msgsnd failed\n");
+                fprintf(stderr, "[CHILD] msgsnd failed\n");
                 exit(EXIT_FAILURE);
             }
 
             continue;
         }
 
-        printf("Received reading of %d from PID=%d\n", rx_data.sensor_reading, rx_data.pid);
+        printf("[CHILD] Received reading of %d from PID=%d\n", rx_data.sensor_reading, rx_data.pid);
 
         if (rx_data.sensor_reading >= devices[received_device_index].threshold)
         {
@@ -162,23 +163,38 @@ void child_handler(void)
 
             if (actuator_index == -1)
             {
-                printf("There are no actuators available at this time.\n");
+                printf("[CHILD] There are no actuators available at this time.\n");
                 continue;
             }
 
             // Constructs and sends a command message to an actuator
             memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = devices[actuator_index].pid;
-            strncpy(tx_data.data, "command", sizeof(tx_data.data));
+            strncpy(tx_data.data, "turn off", sizeof(tx_data.data));
 
-            printf("Sending command to actuator with PID=%d\n", (int)tx_data.type);
+            printf("[CHILD] Sending command to actuator with PID=%d\n", (int)tx_data.type);
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
-                fprintf(stderr, "msgsnd failed\n");
+                fprintf(stderr, "[CHILD] msgsnd failed\n");
                 exit(EXIT_FAILURE);
             }
 
-            // Raises signal sent to parent process
+            // TODO (Brandon): Raise signal sent to parent process
+
+            // Constructs and sends an update message to the parent
+            memset((void *)&tx_data, 0, sizeof(tx_data));
+            tx_data.type = ppid;
+            tx_data.threshold = devices[received_device_index].threshold;
+            tx_data.sensor_reading = rx_data.sensor_reading;
+            tx_data.pid = rx_data.pid;
+            strncpy(tx_data.data, "turn off", sizeof(tx_data.data));
+
+            printf("[CHILD] Sending update to parent\n");
+            if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+            {
+                fprintf(stderr, "[CHILD] msgsnd failed\n");
+                exit(EXIT_FAILURE);
+            }
         }
     }
 }
@@ -217,6 +233,35 @@ int get_actuator_index(struct device_info *devices, int size)
 
 void parent_handler(void)
 {
-    while(wait(NULL)>0);
+    pid_t pid = getpid();
+    int msgid;
+
+    struct message_struct rx_data;
+    int rx_data_size = sizeof(struct message_struct) - sizeof(long);
+
+    //printf("[PARENT] PID=%d\n", pid);
+
+    // Creates a message queue
+    msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666 | IPC_CREAT);
+    if (msgid == -1)
+    {
+        fprintf(stderr, "[PARENT] msgget failed with error: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    while (1)
+    {
+        // Block until a message is received
+        if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
+                    pid, 0) == -1)
+        {
+            fprintf(stderr, "[PARENT] msgrcv failed with error: %d\n", errno);
+            exit(EXIT_FAILURE);
+        }
+
+        printf("[PARENT] Received updated from child. Sensor: pid=%d, threshold=%d, reading=%d, command='%s'\n",
+                rx_data.pid, rx_data.threshold, rx_data.sensor_reading, rx_data.data);
+    }
+    //while(wait(NULL)>0);
 }
 

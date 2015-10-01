@@ -34,9 +34,9 @@ int main(int argc, char* argv[])
     int running = 1;
     struct timeval t1, t2;
 
-    struct update_struct tx_data;
+    struct message_struct tx_data;
     struct message_struct rx_data;
-    int tx_data_size = sizeof(struct update_struct) - sizeof(long);
+    int tx_data_size = sizeof(struct message_struct) - sizeof(long);
     int rx_data_size = sizeof(struct message_struct) - sizeof(long);
 
     if (argc < 2)
@@ -106,7 +106,14 @@ int main(int argc, char* argv[])
                 exit(EXIT_FAILURE);
             }
 
-            printf("Action triggered!\n");
+            // If a stop messge is received, stop the device
+            if (strncmp(rx_data.data, "stop", 4) == 0)
+            {
+                printf("Received stop command from controller... stopping device.\n");
+                break;
+            }
+
+            printf("Received '%s' from controller\n", rx_data.data);
 
             // TODO (Brandon): Send response back to the Controller
 
