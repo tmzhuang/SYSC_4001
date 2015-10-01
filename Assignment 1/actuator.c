@@ -58,13 +58,14 @@ int main(int argc, char* argv[])
     }
 
     // Initial message to send
+    memset((void *)&tx_data, 0, sizeof(tx_data));
     tx_data.type = TO_CONTROLLER;
     strncpy(tx_data.name, name, sizeof(tx_data.name));
     tx_data.device_type = DEVICE_TYPE_ACTUATOR;
     tx_data.pid = pid;
 
     // Send initial message to controller
-    printf("Attempting to establish connection with controller...\n");
+    printf("Attempting to establish connection with Controller...\n");
     if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
     {
         fprintf(stderr, "msgsnd failed\n");
@@ -85,7 +86,7 @@ int main(int argc, char* argv[])
         fprintf(stderr, "Expected ack message but received non-ack message\n");
         exit(EXIT_FAILURE);
     }
-    printf("Connection establish.\n");
+    printf("Received ack message from Controller. Connection establish.\n");
 
     // Make note of current time
     gettimeofday(&t1, NULL);
@@ -109,13 +110,24 @@ int main(int argc, char* argv[])
             // If a stop messge is received, stop the device
             if (strncmp(rx_data.data, "stop", 4) == 0)
             {
-                printf("Received stop command from controller... stopping device.\n");
+                printf("Received stop command from Controller. Stopping device.\n");
                 break;
             }
 
-            printf("Received '%s' from controller\n", rx_data.data);
+            printf("Received '%s' from Controller\n", rx_data.data);
 
-            // TODO (Brandon): Send response back to the Controller
+            // Constructs and sends response back to the Controller
+            memset((void *)&tx_data, 0, sizeof(tx_data));
+            tx_data.type = TO_CONTROLLER;
+            tx_data.device_type = DEVICE_TYPE_ACTUATOR;
+            tx_data.pid = pid;
+
+            printf("Sending ack message to Controller\n");
+            if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+            {
+                fprintf(stderr, "msgsnd failed\n");
+                exit(EXIT_FAILURE);
+            }
 
             // Make note of current time
             gettimeofday(&t1, NULL);

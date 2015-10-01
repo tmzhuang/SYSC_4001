@@ -88,7 +88,7 @@ int main(int argc, char* argv[])
     tx_data.pid = pid;
 
     // Send initial message to controller
-    printf("Attempting to establish connection with controller...\n");
+    printf("Attempting to establish connection with Controller...\n");
     if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
     {
         fprintf(stderr, "msgsnd failed\n");
@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
         fprintf(stderr, "Expected ack message but received non-ack message\n");
         exit(EXIT_FAILURE);
     }
-    printf("Connection establish.\n");
+    printf("Received ack message from Controller. Connection establish.\n");
 
     // Initilize random number generator
     srand(time(NULL));
@@ -164,7 +164,7 @@ int main(int argc, char* argv[])
                 // If a stop messge is received, stop the device
                 if (strncmp(rx_data.data, "stop", 3) == 0)
                 {
-                    printf("Received stop command from controller... stopping device.\n");
+                    printf("Received stop command from Controller. Stopping device.\n");
                     break;
                 }
             }

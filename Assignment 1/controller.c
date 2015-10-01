@@ -160,13 +160,12 @@ void child_handler(void)
                     TO_CONTROLLER, 0) == -1)
         {
             fprintf(stderr, "PID=%d [CHILD] msgrcv failed with error: %d\n", pid, errno);
-            fprintf(stderr, "%s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
 
         // Register device if it hasn't been registered yet
         int received_device_index = get_device_index(rx_data.pid, devices, MAX_DEVICES);
-        printf("received_device_index = %d\n", received_device_index);
+        //printf("received_device_index = %d\n", received_device_index);
         if (received_device_index == -1)
         {
             devices[current_devices_index].pid = rx_data.pid;
@@ -191,6 +190,12 @@ void child_handler(void)
             continue;
         }
 
+        if (rx_data.device_type == DEVICE_TYPE_ACTUATOR)
+        {
+            printf("[CHILD] Received ack from Actuator with PID=%d\n", (int)rx_data.pid);
+            continue;
+        }
+
         printf("[CHILD] Received reading of %d from PID=%d\n", rx_data.sensor_reading, rx_data.pid);
 
         if (rx_data.sensor_reading >= devices[received_device_index].threshold)
@@ -209,7 +214,7 @@ void child_handler(void)
             tx_data.type = devices[actuator_index].pid;
             strncpy(tx_data.data, "turn off", sizeof(tx_data.data));
 
-            printf("[CHILD] Sending command to actuator with PID=%d\n", (int)tx_data.type);
+            printf("[CHILD] Sending command to Actuator with PID=%d\n", (int)tx_data.type);
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
                 fprintf(stderr, "[CHILD] msgsnd failed\n");
