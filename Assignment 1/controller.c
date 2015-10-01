@@ -38,9 +38,11 @@
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <sys/msg.h>
 #include <sys/wait.h>
+#include <sys/types.h>
 
 #include "message_queue.h"
 
@@ -59,6 +61,9 @@ int get_device_index(pid_t pid, struct device_info *devices, int size);
 int get_actuator_index(struct device_info *devices, int size);
 
 void parent_handler(void);
+void get_message(int signal_number);
+
+sig_atomic_t get_message_flag = 0;
 
 int main(int argc, char* argv[])
 {
@@ -179,8 +184,6 @@ void child_handler(void)
                 exit(EXIT_FAILURE);
             }
 
-            // TODO (Brandon): Raise signal sent to parent process
-
             // Constructs and sends an update message to the parent
             memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = ppid;
@@ -195,6 +198,9 @@ void child_handler(void)
                 fprintf(stderr, "[CHILD] msgsnd failed\n");
                 exit(EXIT_FAILURE);
             }
+
+            // Raise signal for parent process
+            kill(ppid, SIGUSR1);
         }
     }
 }
@@ -239,6 +245,11 @@ void parent_handler(void)
     struct message_struct rx_data;
     int rx_data_size = sizeof(struct message_struct) - sizeof(long);
 
+    struct sigaction sa;
+    memset((void *)&sa, 0, sizeof(sa));
+    sa.sa_handler = &get_message;
+    sigaction(SIGUSR1, &sa, 0);
+
     //printf("[PARENT] PID=%d\n", pid);
 
     // Creates a message queue
@@ -251,17 +262,27 @@ void parent_handler(void)
 
     while (1)
     {
-        // Block until a message is received
-        if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
-                    pid, 0) == -1)
+        if (get_message_flag)
         {
-            fprintf(stderr, "[PARENT] msgrcv failed with error: %d\n", errno);
-            exit(EXIT_FAILURE);
-        }
+            // Receive update message from child
+            if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
+                        pid, IPC_NOWAIT) == -1)
+            {
+                fprintf(stderr, "[PARENT] msgrcv failed with error: %d\n", errno);
+                exit(EXIT_FAILURE);
+            }
 
-        printf("[PARENT] Received updated from child. Sensor: pid=%d, threshold=%d, reading=%d, command='%s'\n",
-                rx_data.pid, rx_data.threshold, rx_data.sensor_reading, rx_data.data);
+            printf("[PARENT] Received update from child. Sensor: pid=%d, threshold=%d, reading=%d, command='%s'\n",
+                    rx_data.pid, rx_data.threshold, rx_data.sensor_reading, rx_data.data);
+
+            get_message_flag = 0;
+        }
     }
     //while(wait(NULL)>0);
 }
 
+// Signal handler for SIGUSR1
+void get_message(int signal_number)
+{
+    get_message_flag = 1;
+}
