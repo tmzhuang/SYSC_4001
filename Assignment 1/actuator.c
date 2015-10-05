@@ -114,15 +114,21 @@ int main(int argc, char* argv[])
                 break;
             }
 
-            printf("Received '%s' from Controller\n", rx_data.data);
+            // Threshold field is being multiplexed as sequence number
+            printf("Received '%s' with Sequence#=%d from Controller\n",
+                    rx_data.data, rx_data.threshold);
 
             // Constructs and sends response back to the Controller
             memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = TO_CONTROLLER;
             tx_data.device_type = DEVICE_TYPE_ACTUATOR;
+            tx_data.threshold = rx_data.threshold;
             tx_data.pid = pid;
+            strncpy(tx_data.data, "ack", sizeof(tx_data.data));
 
-            printf("Sending ack message to Controller\n");
+            // Threshold field is being multiplexed as sequence number
+            printf("Sending ack message with Sequence#=%d to Controller\n",
+                    tx_data.threshold);
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
                 fprintf(stderr, "msgsnd failed\n");

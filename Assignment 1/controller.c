@@ -128,6 +128,7 @@ void child_handler(void)
     pid_t pid = getpid();
     pid_t ppid = getppid();
     int msgid;
+    int sequence_number = 1;
 
     struct device_info devices[MAX_DEVICES];
     int current_devices_index = 0;
@@ -190,9 +191,11 @@ void child_handler(void)
             continue;
         }
 
+        // Threshold field is being multiplexed as sequence number
         if (rx_data.device_type == DEVICE_TYPE_ACTUATOR)
         {
-            printf("[CHILD] Received ack from Actuator with PID=%d\n", (int)rx_data.pid);
+            printf("[CHILD] Received ack from Actuator with PID=%d and Sequence#=%d\n",
+                    (int)rx_data.pid, rx_data.threshold);
             continue;
         }
 
@@ -212,9 +215,11 @@ void child_handler(void)
             // Constructs and sends a command message to an actuator
             memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = devices[actuator_index].pid;
+            tx_data.threshold = sequence_number; // Threshold field multiplex as sequence number
             strncpy(tx_data.data, "turn off", sizeof(tx_data.data));
 
-            printf("[CHILD] Sending command to Actuator with PID=%d\n", (int)tx_data.type);
+            printf("[CHILD] Sending command to Actuator with PID=%d and Sequence#=%d\n",
+                    (int)tx_data.type, sequence_number++);
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
                 fprintf(stderr, "[CHILD] msgsnd failed\n");
