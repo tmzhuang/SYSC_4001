@@ -60,9 +60,9 @@ int main(int argc, char* argv[])
     // Initial message to send
     memset((void *)&tx_data, 0, sizeof(tx_data));
     tx_data.type = TO_CONTROLLER;
-    strncpy(tx_data.name, name, sizeof(tx_data.name));
-    tx_data.device_type = DEVICE_TYPE_ACTUATOR;
-    tx_data.pid = pid;
+    strncpy(tx_data.fields.name, name, sizeof(tx_data.fields.name));
+    tx_data.fields.device_type = DEVICE_TYPE_ACTUATOR;
+    tx_data.fields.pid = pid;
 
     // Send initial message to controller
     printf("Attempting to establish connection with Controller...\n");
@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
     }
 
     // Check if the message received is an ack
-    if (strncmp(rx_data.data, "ack", 3) != 0)
+    if (strncmp(rx_data.fields.data, "ack", 3) != 0)
     {
         fprintf(stderr, "Expected ack message but received non-ack message\n");
         exit(EXIT_FAILURE);
@@ -108,7 +108,7 @@ int main(int argc, char* argv[])
             }
 
             // If a stop messge is received, stop the device
-            if (strncmp(rx_data.data, "stop", 4) == 0)
+            if (strncmp(rx_data.fields.data, "stop", 4) == 0)
             {
                 printf("Received stop command from Controller. Stopping device.\n");
                 break;
@@ -116,19 +116,19 @@ int main(int argc, char* argv[])
 
             // Threshold field is being multiplexed as sequence number
             printf("Received '%s' with Sequence#=%d from Controller\n",
-                    rx_data.data, rx_data.threshold);
+                    rx_data.fields.data, rx_data.fields.threshold);
 
             // Constructs and sends response back to the Controller
             memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = TO_CONTROLLER;
-            tx_data.device_type = DEVICE_TYPE_ACTUATOR;
-            tx_data.threshold = rx_data.threshold;
-            tx_data.pid = pid;
-            strncpy(tx_data.data, "ack", sizeof(tx_data.data));
+            tx_data.fields.device_type = DEVICE_TYPE_ACTUATOR;
+            tx_data.fields.threshold = rx_data.fields.threshold;
+            tx_data.fields.pid = pid;
+            strncpy(tx_data.fields.data, "ack", sizeof(tx_data.fields.data));
 
             // Threshold field is being multiplexed as sequence number
             printf("Sending ack message with Sequence#=%d to Controller\n",
-                    tx_data.threshold);
+                    tx_data.fields.threshold);
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
                 fprintf(stderr, "msgsnd failed\n");

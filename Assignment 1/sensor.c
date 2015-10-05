@@ -82,10 +82,10 @@ int main(int argc, char* argv[])
 
     // Initial message to send
     tx_data.type = TO_CONTROLLER;
-    strncpy(tx_data.name, name, sizeof(tx_data.name));
-    tx_data.device_type = DEVICE_TYPE_SENSOR;
-    tx_data.threshold = threshold;
-    tx_data.pid = pid;
+    strncpy(tx_data.fields.name, name, sizeof(tx_data.fields.name));
+    tx_data.fields.device_type = DEVICE_TYPE_SENSOR;
+    tx_data.fields.threshold = threshold;
+    tx_data.fields.pid = pid;
 
     // Send initial message to controller
     printf("Attempting to establish connection with Controller...\n");
@@ -104,7 +104,7 @@ int main(int argc, char* argv[])
     }
 
     // Check if the message received is an ack
-    if (strncmp(rx_data.data, "ack", 3) != 0)
+    if (strncmp(rx_data.fields.data, "ack", 3) != 0)
     {
         fprintf(stderr, "Expected ack message but received non-ack message\n");
         exit(EXIT_FAILURE);
@@ -138,8 +138,8 @@ int main(int argc, char* argv[])
             // Constructs and sends update message to controller
             memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = TO_CONTROLLER;
-            tx_data.sensor_reading = sensor_reading;
-            tx_data.pid = pid;
+            tx_data.fields.sensor_reading = sensor_reading;
+            tx_data.fields.pid = pid;
 
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
@@ -162,7 +162,7 @@ int main(int argc, char* argv[])
             else if (result > 0)
             {
                 // If a stop messge is received, stop the device
-                if (strncmp(rx_data.data, "stop", 3) == 0)
+                if (strncmp(rx_data.fields.data, "stop", 3) == 0)
                 {
                     printf("Received stop command from Controller. Stopping device.\n");
                     break;

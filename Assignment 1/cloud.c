@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
         }
 
         printf("Received update from Controller. Sensor: pid=%d, name='%s', threshold=%d, reading=%d\n",
-                rx_data.pid, rx_data.name, rx_data.threshold, rx_data.sensor_reading);
+                rx_data.fields.pid, rx_data.fields.name, rx_data.fields.threshold, rx_data.fields.sensor_reading);
     }
 
     close(fifo_fd);

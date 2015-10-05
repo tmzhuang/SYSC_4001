@@ -165,23 +165,23 @@ void child_handler(void)
         }
 
         // Register device if it hasn't been registered yet
-        int received_device_index = get_device_index(rx_data.pid, devices, MAX_DEVICES);
+        int received_device_index = get_device_index(rx_data.fields.pid, devices, MAX_DEVICES);
         //printf("received_device_index = %d\n", received_device_index);
         if (received_device_index == -1)
         {
-            devices[current_devices_index].pid = rx_data.pid;
-            strncpy(devices[current_devices_index].name, rx_data.name, sizeof(devices[current_devices_index].name));
-            devices[current_devices_index].device_type = rx_data.device_type;
-            devices[current_devices_index].threshold = rx_data.threshold;
-            printf("[CHILD] Device with PID=%d is now registered!\n", rx_data.pid);
+            devices[current_devices_index].pid = rx_data.fields.pid;
+            strncpy(devices[current_devices_index].name, rx_data.fields.name, sizeof(devices[current_devices_index].name));
+            devices[current_devices_index].device_type = rx_data.fields.device_type;
+            devices[current_devices_index].threshold = rx_data.fields.threshold;
+            printf("[CHILD] Device with PID=%d is now registered!\n", rx_data.fields.pid);
             current_devices_index++;
 
             // Constructs and sends an acknowledgement message to device
             memset((void *)&tx_data, 0, sizeof(tx_data));
-            tx_data.type = rx_data.pid;
-            strncpy(tx_data.data, "ack", sizeof(tx_data.data));
+            tx_data.type = rx_data.fields.pid;
+            strncpy(tx_data.fields.data, "ack", sizeof(tx_data.fields.data));
 
-            printf("[CHILD] Sending ack to device with PID=%d\n", rx_data.pid);
+            printf("[CHILD] Sending ack to device with PID=%d\n", rx_data.fields.pid);
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
                 fprintf(stderr, "[CHILD] msgsnd failed\n");
@@ -192,16 +192,16 @@ void child_handler(void)
         }
 
         // Threshold field is being multiplexed as sequence number
-        if (rx_data.device_type == DEVICE_TYPE_ACTUATOR)
+        if (rx_data.fields.device_type == DEVICE_TYPE_ACTUATOR)
         {
             printf("[CHILD] Received ack from Actuator with PID=%d and Sequence#=%d\n",
-                    (int)rx_data.pid, rx_data.threshold);
+                    (int)rx_data.fields.pid, rx_data.fields.threshold);
             continue;
         }
 
-        printf("[CHILD] Received reading of %d from PID=%d\n", rx_data.sensor_reading, rx_data.pid);
+        printf("[CHILD] Received reading of %d from PID=%d\n", rx_data.fields.sensor_reading, rx_data.fields.pid);
 
-        if (rx_data.sensor_reading >= devices[received_device_index].threshold)
+        if (rx_data.fields.sensor_reading >= devices[received_device_index].threshold)
         {
             // Find an actuator
             int actuator_index = get_actuator_index(devices, MAX_DEVICES);
@@ -215,8 +215,8 @@ void child_handler(void)
             // Constructs and sends a command message to an actuator
             memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = devices[actuator_index].pid;
-            tx_data.threshold = sequence_number; // Threshold field multiplex as sequence number
-            strncpy(tx_data.data, "turn off", sizeof(tx_data.data));
+            tx_data.fields.threshold = sequence_number; // Threshold field multiplex as sequence number
+            strncpy(tx_data.fields.data, "turn off", sizeof(tx_data.fields.data));
 
             printf("[CHILD] Sending command to Actuator with PID=%d and Sequence#=%d\n",
                     (int)tx_data.type, sequence_number++);
@@ -229,11 +229,11 @@ void child_handler(void)
             // Constructs and sends an update message to the parent
             memset((void *)&tx_data, 0, sizeof(tx_data));
             tx_data.type = ppid;
-            strncpy(tx_data.name, devices[received_device_index].name, sizeof(tx_data.name));
-            tx_data.threshold = devices[received_device_index].threshold;
-            tx_data.sensor_reading = rx_data.sensor_reading;
-            tx_data.pid = rx_data.pid;
-            strncpy(tx_data.data, "turn off", sizeof(tx_data.data));
+            strncpy(tx_data.fields.name, devices[received_device_index].name, sizeof(tx_data.fields.name));
+            tx_data.fields.threshold = devices[received_device_index].threshold;
+            tx_data.fields.sensor_reading = rx_data.fields.sensor_reading;
+            tx_data.fields.pid = rx_data.fields.pid;
+            strncpy(tx_data.fields.data, "turn off", sizeof(tx_data.fields.data));
 
             printf("[CHILD] Sending update to parent\n");
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
@@ -343,13 +343,13 @@ void parent_handler(void)
             }
 
             printf("[PARENT] Received update from child. Sensor: pid=%d, threshold=%d, reading=%d, command='%s'\n",
-                    rx_data.pid, rx_data.threshold, rx_data.sensor_reading, rx_data.data);
+                    rx_data.fields.pid, rx_data.fields.threshold, rx_data.fields.sensor_reading, rx_data.fields.data);
 
             // Constructs and sends update to Cloud process
-            strncpy(tx_data.name, rx_data.name, sizeof(tx_data.name));
-            tx_data.threshold = rx_data.threshold;
-            tx_data.sensor_reading = rx_data.sensor_reading;
-            tx_data.pid = rx_data.pid;
+            strncpy(tx_data.fields.name, rx_data.fields.name, sizeof(tx_data.fields.name));
+            tx_data.fields.threshold = rx_data.fields.threshold;
+            tx_data.fields.sensor_reading = rx_data.fields.sensor_reading;
+            tx_data.fields.pid = rx_data.fields.pid;
 
             if (write(fifo_fd, (void *)&tx_data, tx_data_size) == -1)
             {

@@ -24,11 +24,14 @@
 struct message_struct
 {
     long type;
-    char name[MAX_NAME_LENGTH];
-    char device_type;
-    int threshold;
-    int sensor_reading;
-    pid_t pid;
-    char data[MAX_DATA_LENGTH];
+    struct message_fields
+    {
+        char name[MAX_NAME_LENGTH];
+        char device_type;
+        int threshold;
+        int sensor_reading;
+        pid_t pid;
+        char data[MAX_DATA_LENGTH];
+    } fields;
 };
 
