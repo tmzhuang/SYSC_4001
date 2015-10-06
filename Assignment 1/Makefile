@@ -1,6 +1,6 @@
 BDIR = bin
 
-_OBJS = sensor controller actuator cloud
+_OBJS = sensor controller actuator cloud queue
 
 OBJS = $(patsubst %,$(BDIR)/%,$(_OBJS))
 
@@ -23,6 +23,10 @@ $(BDIR)/actuator: actuator.c message_queue.h
 	$(CC) $(CFLAGS) -o $@ $<
 
 $(BDIR)/cloud: cloud.c message_queue.h fifo.h
+	@mkdir -p $(BDIR)
+	$(CC) $(CFLAGS) -o $@ $<
+
+$(BDIR)/queue: queue.c queue.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 
