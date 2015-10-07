@@ -1,20 +1,20 @@
 BDIR = bin
 
-_OBJS = sensor controller actuator cloud queue
+_BINS = sensor controller actuator cloud
 
-OBJS = $(patsubst %,$(BDIR)/%,$(_OBJS))
+BINS = $(patsubst %,$(BDIR)/%,$(_BINS))
 
 CC = gcc
 
 CFLAGS = -std=c99 -D_XOPEN_SOURCE
 
-all: $(OBJS)
+all: $(BINS)
 
 $(BDIR)/sensor: sensor.c message_queue.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 
-$(BDIR)/controller: controller.c message_queue.h fifo.h
+$(BDIR)/controller: controller.c queue.c message_queue.h fifo.h queue.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 
@@ -23,10 +23,6 @@ $(BDIR)/actuator: actuator.c message_queue.h
 	$(CC) $(CFLAGS) -o $@ $<
 
 $(BDIR)/cloud: cloud.c message_queue.h fifo.h
-	@mkdir -p $(BDIR)
-	$(CC) $(CFLAGS) -o $@ $<
-
-$(BDIR)/queue: queue.c queue.h
 	@mkdir -p $(BDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 

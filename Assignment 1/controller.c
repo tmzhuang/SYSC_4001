@@ -48,6 +48,7 @@
 
 #include "message_queue.h"
 #include "fifo.h"
+#include "queue.c"
 
 #define MAX_DEVICES 256
 
@@ -57,11 +58,12 @@ struct device_info
     char name[MAX_NAME_LENGTH];
     char device_type;
     int threshold;
+    int actuator_index;
 };
 
 void child_handler(void);
 int get_device_index(pid_t pid, struct device_info *devices, int size);
-int get_actuator_index(struct device_info *devices, int size);
+int get_actuator_index(pid_t pid, struct device_info *devices, int size);
 
 void parent_handler(void);
 void get_message(int signal_number);
@@ -131,6 +133,8 @@ void child_handler(void)
     int sequence_number = 1;
 
     struct device_info devices[MAX_DEVICES];
+    struct queue *unmapped_sensor_index_queue = queue_create();
+    struct queue *unmapped_actuator_index_queue = queue_create();;
     int current_devices_index = 0;
 
     int result;
@@ -154,6 +158,12 @@ void child_handler(void)
 
     printf("[CHILD] Ready to receive messages\n");
 
+    // No actuators mapped to any sensors yet
+    for (int i=0; i<MAX_DEVICES; i++)
+    {
+        devices[i].actuator_index = -1;
+    }
+
     while (1)
     {
         // Block until a message is received
@@ -173,7 +183,43 @@ void child_handler(void)
             strncpy(devices[current_devices_index].name, rx_data.fields.name, sizeof(devices[current_devices_index].name));
             devices[current_devices_index].device_type = rx_data.fields.device_type;
             devices[current_devices_index].threshold = rx_data.fields.threshold;
-            printf("[CHILD] Device with PID=%d is now registered!\n", rx_data.fields.pid);
+            devices[current_devices_index].actuator_index = -1;
+
+            // Map Actuator to available Sensor
+            if (rx_data.fields.device_type == DEVICE_TYPE_ACTUATOR)
+            {
+                printf("[CHILD] Actuator with PID=%d is now registered!\n", rx_data.fields.pid);
+                int unmapped_sensor_index;
+                int result = queue_remove(unmapped_sensor_index_queue, &unmapped_sensor_index);
+                if (result == -1)
+                {
+                    printf("[CHILD] There are no available Sensors at the moment. Queuing up Actuator to be mapped to next available Sensor.\n");
+                    queue_add(unmapped_actuator_index_queue, current_devices_index);
+                }
+                else
+                {
+                    printf("[CHILD] Actuator successfully mapped to available Sensor.\n");
+                    devices[unmapped_sensor_index].actuator_index = current_devices_index;
+                }
+            }
+            // Map Sensor to available Actuator
+            else if (rx_data.fields.device_type == DEVICE_TYPE_SENSOR)
+            {
+                printf("[CHILD] Sensor with PID=%d is now registered!\n", rx_data.fields.pid);
+                int unmapped_actuator_index;
+                int result = queue_remove(unmapped_actuator_index_queue, &unmapped_actuator_index);
+                if (result == -1)
+                {
+                    printf("[CHILD] There are no available Actuators at the moment. Queuing up Sensor to be mapped to next available Actuator.\n");
+                    queue_add(unmapped_sensor_index_queue, current_devices_index);
+                }
+                else
+                {
+                    printf("[CHILD] Actuator successfully mapped to available Sensor.\n");
+                    devices[current_devices_index].actuator_index = unmapped_actuator_index;
+                }
+            }
+
             current_devices_index++;
 
             // Constructs and sends an acknowledgement message to device
@@ -181,7 +227,7 @@ void child_handler(void)
             tx_data.type = rx_data.fields.pid;
             strncpy(tx_data.fields.data, "ack", sizeof(tx_data.fields.data));
 
-            printf("[CHILD] Sending ack to device with PID=%d\n", rx_data.fields.pid);
+            printf("[CHILD] Sending ack to Device with PID=%d\n", rx_data.fields.pid);
             if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
             {
                 fprintf(stderr, "[CHILD] msgsnd failed\n");
@@ -203,12 +249,12 @@ void child_handler(void)
 
         if (rx_data.fields.sensor_reading >= devices[received_device_index].threshold)
         {
-            // Find an actuator
-            int actuator_index = get_actuator_index(devices, MAX_DEVICES);
+            // Find index of mapped Actuator
+            int actuator_index = get_actuator_index(rx_data.fields.pid, devices, MAX_DEVICES);
 
             if (actuator_index == -1)
             {
-                printf("[CHILD] There are no actuators available at this time.\n");
+                printf("[CHILD] This Sensor is not currently mapped to any Actuators.\n");
                 continue;
             }
 
@@ -264,15 +310,15 @@ int get_device_index(pid_t pid, struct device_info *devices, int size)
     return index;
 }
 
-int get_actuator_index(struct device_info *devices, int size)
+int get_actuator_index(pid_t pid, struct device_info *devices, int size)
 {
     int index = -1;
 
     for (int i=0; i<size; i++)
     {
-        if (devices[i].device_type == DEVICE_TYPE_ACTUATOR)
+        if (devices[i].pid == pid)
         {
-            index = i;
+            index = devices[i].actuator_index;
             break;
         }
     }
