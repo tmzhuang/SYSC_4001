@@ -10,6 +10,8 @@
  * An integer queue.
  *
  */
+#ifndef QUEUE_H_
+#define QUEUE_H_
 
 struct node
 {
@@ -28,5 +30,6 @@ struct queue *queue_create();
 void queue_add(struct queue *q, int i);
 int queue_remove(struct queue *q, int *i);
 void queue_destroy(struct queue *q);
-void queue_print(struct queue *q)
+void queue_print(struct queue *q);
 
+#endif
