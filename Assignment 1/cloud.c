@@ -87,8 +87,19 @@ int main(int argc, char* argv[])
         if((bytes_read = read(fifo_fd, (void *)&rx_data,
                         sizeof(rx_data))) == -1)
         {
-            fprintf(stderr, "read failed with error: %d\n", errno);
-            exit(EXIT_FAILURE);
+            if (errno != 11)
+            {
+                fprintf(stderr, "read failed with error: %d\n", errno);
+                exit(EXIT_FAILURE);
+            }
+            continue;
+        }
+
+        if (strncmp(rx_data.fields.data, "stop", 4) == 0)
+        {
+            printf("Received stop command from Controller. Stopping device.\n");
+            running = 0;
+            break;
         }
 
         printf("Received update from Controller. Sensor: pid=%d, name='%s', threshold=%d, reading=%d\n",

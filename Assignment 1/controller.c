@@ -66,15 +66,24 @@ int get_device_index(pid_t pid, struct device_info *devices, int size);
 int get_actuator_index(pid_t pid, struct device_info *devices, int size);
 
 void parent_handler(void);
-void get_message(int signal_number);
 
-sig_atomic_t get_message_flag = 0;
+void get_message(int signal_number);
+void program_done(int signal_number);
+
+sig_atomic_t g_get_message_flag = 0;
+sig_atomic_t g_program_done_flag = 0;
 
 int main(int argc, char* argv[])
 {
     pid_t pid;
 
     char *name;
+
+    // Capture SIGINT to close cleanly
+    struct sigaction sa;
+    memset((void *)&sa, 0, sizeof(sa));
+    sa.sa_handler = &program_done;
+    sigaction(SIGINT, &sa, 0);
 
     if (argc < 2)
     {
@@ -164,14 +173,18 @@ void child_handler(void)
         devices[i].actuator_index = -1;
     }
 
-    while (1)
+    while (!g_program_done_flag)
     {
         // Block until a message is received
         if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
-                    TO_CONTROLLER, 0) == -1)
+                    TO_CONTROLLER, IPC_NOWAIT) == -1)
         {
-            fprintf(stderr, "PID=%d [CHILD] msgrcv failed with error: %d\n", pid, errno);
-            exit(EXIT_FAILURE);
+            if (errno != ENOMSG)
+            {
+                fprintf(stderr, "PID=%d [CHILD] msgrcv failed with error: %d\n", pid, errno);
+                exit(EXIT_FAILURE);
+            }
+            continue;
         }
 
         // Register device if it hasn't been registered yet
@@ -292,6 +305,23 @@ void child_handler(void)
             kill(ppid, SIGUSR1);
         }
     }
+
+    // Constructs and sends stop command to all device
+    memset((void *)&tx_data, 0, sizeof(tx_data));
+    strncpy(tx_data.fields.data, "stop", sizeof(tx_data.fields.data));
+    for (int i=0; i<current_devices_index; i++)
+    {
+        printf("[CHILD] Sending stop to Device with PID=%d\n", devices[i].pid);
+        tx_data.type = devices[i].pid;
+        if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+        {
+            fprintf(stderr, "[CHILD] msgsnd failed\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    queue_destroy(unmapped_sensor_index_queue);
+    queue_destroy(unmapped_actuator_index_queue);
 }
 
 int get_device_index(pid_t pid, struct device_info *devices, int size)
@@ -376,16 +406,20 @@ void parent_handler(void)
 
     printf("[PARENT] Connected to Cloud via FIFO\n");
 
-    while (1)
+    while (!g_program_done_flag)
     {
-        if (get_message_flag)
+        if (g_get_message_flag)
         {
             // Receive update message from child
             if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
                         pid, IPC_NOWAIT) == -1)
             {
-                fprintf(stderr, "[PARENT] msgrcv failed with error: %d\n", errno);
-                exit(EXIT_FAILURE);
+                if (errno != ENOMSG)
+                {
+                    fprintf(stderr, "[PARENT] msgrcv failed with error: %d\n", errno);
+                    exit(EXIT_FAILURE);
+                }
+                continue;
             }
 
             printf("[PARENT] Received update from child. Sensor: pid=%d, threshold=%d, reading=%d, command='%s'\n",
@@ -403,8 +437,17 @@ void parent_handler(void)
                 exit(EXIT_FAILURE);
             }
 
-            get_message_flag = 0;
+            g_get_message_flag = 0;
         }
+    }
+
+    // Constructs and sends stop command to Cloud process
+    strncpy(tx_data.fields.data, "stop", sizeof(tx_data.fields.name));
+    printf("[Parent] Sending stop to Cloud\n");
+    if (write(fifo_fd, (void *)&tx_data, tx_data_size) == -1)
+    {
+        fprintf(stderr, "[PARENT] write failed with error: %d\n", errno);
+        exit(EXIT_FAILURE);
     }
 
     close(fifo_fd);
@@ -413,5 +456,11 @@ void parent_handler(void)
 // Signal handler for SIGUSR1
 void get_message(int signal_number)
 {
-    get_message_flag = 1;
+    g_get_message_flag = 1;
+}
+
+// Signal handler for SIGINT
+void program_done(int signal_number)
+{
+    g_program_done_flag = 1;
 }
