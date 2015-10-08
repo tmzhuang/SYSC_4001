@@ -11,5 +11,6 @@
  *
  */
 
-#define FIFO_NAME "/tmp/fifo1"
+#define FIFO_1_NAME "/tmp/fifo1"
+#define FIFO_2_NAME "/tmp/fifo2"
 

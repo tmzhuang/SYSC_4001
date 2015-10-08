@@ -12,19 +12,19 @@ all: $(BINS)
 
 $(BDIR)/sensor: sensor.c message_queue.h
 	@mkdir -p $(BDIR)
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $^
 
 $(BDIR)/controller: controller.c queue.c message_queue.h fifo.h queue.h
 	@mkdir -p $(BDIR)
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $^
 
 $(BDIR)/actuator: actuator.c message_queue.h
 	@mkdir -p $(BDIR)
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $^
 
 $(BDIR)/cloud: cloud.c message_queue.h fifo.h
 	@mkdir -p $(BDIR)
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
 	rm -f $(BDIR)/*

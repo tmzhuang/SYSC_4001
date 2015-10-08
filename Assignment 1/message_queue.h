@@ -10,6 +10,7 @@
  * Data related to message queue that is common to multiple processes.
  *
  */
+#include <sys/types.h>
 
 #define MESSAGE_QUEUE_ID 1234
 

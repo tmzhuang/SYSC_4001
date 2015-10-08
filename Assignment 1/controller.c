@@ -48,7 +48,7 @@
 
 #include "message_queue.h"
 #include "fifo.h"
-#include "queue.c"
+#include "queue.h"
 
 #define MAX_DEVICES 256
 
@@ -72,6 +72,8 @@ void program_done(int signal_number);
 
 sig_atomic_t g_get_message_flag = 0;
 sig_atomic_t g_program_done_flag = 0;
+
+int verbose = 0;
 
 int main(int argc, char* argv[])
 {
@@ -258,7 +260,10 @@ void child_handler(void)
             continue;
         }
 
-        printf("[CHILD] Received reading of %d from PID=%d\n", rx_data.fields.sensor_reading, rx_data.fields.pid);
+        if (verbose)
+        {
+            printf("[CHILD] Received reading of %d from PID=%d\n", rx_data.fields.sensor_reading, rx_data.fields.pid);
+        }
 
         if (rx_data.fields.sensor_reading >= devices[received_device_index].threshold)
         {
@@ -360,8 +365,11 @@ void parent_handler(void)
 {
     pid_t pid = getpid();
     int msgid;
-    int fifo_fd;
+    int fifo_fd_wr;
+    int fifo_fd_rd;
+
     int result;
+    int bytes_read;
 
     struct message_struct rx_data;
     struct message_struct tx_data;
@@ -373,7 +381,7 @@ void parent_handler(void)
     sa.sa_handler = &get_message;
     sigaction(SIGUSR1, &sa, 0);
 
-    printf("[Parent] Started with PID=%d\n", pid);
+    printf("[PARENT] Started with PID=%d\n", pid);
 
     // Creates a message queue
     msgid = msgget((key_t)MESSAGE_QUEUE_ID, 0666 | IPC_CREAT);
@@ -384,23 +392,47 @@ void parent_handler(void)
     }
 
     // Check for existance of fifo by attempting to access it
-    if (access(FIFO_NAME, F_OK) == -1)
+    if (access(FIFO_1_NAME, F_OK) == -1)
     {
         // Create the fifo is it does not exist
-        result = mkfifo(FIFO_NAME, 0777);
+        result = mkfifo(FIFO_1_NAME, 0777);
         if (result != 0)
         {
-            fprintf(stderr, "Could not create fifo %s\n", FIFO_NAME);
+            fprintf(stderr, "[PARENT] Could not create fifo %s\n", FIFO_1_NAME);
             exit(EXIT_FAILURE);
         }
     }
 
     // Opens the writing end of the fifo
-    fifo_fd = open(FIFO_NAME, O_WRONLY);
-    if (fifo_fd == -1)
+    fifo_fd_wr = open(FIFO_1_NAME, O_WRONLY);
+    if (fifo_fd_wr == -1)
     {
-        fprintf(stderr, "open failed with error: %d\n", errno);
-        fprintf(stderr, "%s\n", strerror(errno));
+        fprintf(stderr, "[PARENT] open failed with error: %d\n", errno);
+        //fprintf(stderr, "%s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    // Check for existance of fifo by attempting to access it
+    if (access(FIFO_2_NAME, F_OK) == -1)
+    {
+        // Create the fifo is it does not exist
+        result = mkfifo(FIFO_2_NAME, 0777);
+        if (result != 0)
+        {
+            fprintf(stderr, "[PARENT] Could not create fifo %s\n", FIFO_2_NAME);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // Sleep to ensure proper synchronization of cloud's child process
+    sleep(1);
+
+    // Opens the reading end of the fifo
+    fifo_fd_rd = open(FIFO_2_NAME, O_RDONLY | O_NONBLOCK);
+    if (fifo_fd_rd == -1)
+    {
+        fprintf(stderr, "[PARENT] open failed with error: %d\n", errno);
+        //fprintf(stderr, "%s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
@@ -411,6 +443,7 @@ void parent_handler(void)
         if (g_get_message_flag)
         {
             // Receive update message from child
+            memset((void *)&rx_data, 0, sizeof(rx_data));
             if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
                         pid, IPC_NOWAIT) == -1)
             {
@@ -426,12 +459,13 @@ void parent_handler(void)
                     rx_data.fields.pid, rx_data.fields.threshold, rx_data.fields.sensor_reading, rx_data.fields.data);
 
             // Constructs and sends update to Cloud process
+            memset((void *)&tx_data, 0, sizeof(tx_data));
             strncpy(tx_data.fields.name, rx_data.fields.name, sizeof(tx_data.fields.name));
             tx_data.fields.threshold = rx_data.fields.threshold;
             tx_data.fields.sensor_reading = rx_data.fields.sensor_reading;
             tx_data.fields.pid = rx_data.fields.pid;
 
-            if (write(fifo_fd, (void *)&tx_data, tx_data_size) == -1)
+            if (write(fifo_fd_wr, (void *)&tx_data, tx_data_size) == -1)
             {
                 fprintf(stderr, "[PARENT] write failed with error: %d\n", errno);
                 exit(EXIT_FAILURE);
@@ -439,18 +473,37 @@ void parent_handler(void)
 
             g_get_message_flag = 0;
         }
+
+        // Poll FIFO for messages from Cloud process
+        memset((void *)&rx_data, 0, sizeof(rx_data));
+        if((bytes_read = read(fifo_fd_rd, (void *)&rx_data,
+                        sizeof(rx_data))) == -1)
+        {
+            if (errno != 11)
+            {
+                fprintf(stderr, "[PARENT] read failed with error: %d\n", errno);
+                exit(EXIT_FAILURE);
+            }
+            //fprintf(stderr, "%s", strerror(errno));
+            continue;
+        }
+
+        // TODO: Notify child process
+        printf("[PARENT] Received message '%s' from Cloud process.\n", rx_data.fields.data);
     }
 
     // Constructs and sends stop command to Cloud process
-    strncpy(tx_data.fields.data, "stop", sizeof(tx_data.fields.name));
-    printf("[Parent] Sending stop to Cloud\n");
-    if (write(fifo_fd, (void *)&tx_data, tx_data_size) == -1)
+    memset((void *)&tx_data, 0, sizeof(tx_data));
+    strncpy(tx_data.fields.data, "stop", sizeof(tx_data.fields.data));
+    printf("[PARENT] Sending stop to Cloud\n");
+    if (write(fifo_fd_wr, (void *)&tx_data, tx_data_size) == -1)
     {
         fprintf(stderr, "[PARENT] write failed with error: %d\n", errno);
         exit(EXIT_FAILURE);
     }
 
-    close(fifo_fd);
+    close(fifo_fd_wr);
+    close(fifo_fd_rd);
 }
 
 // Signal handler for SIGUSR1
