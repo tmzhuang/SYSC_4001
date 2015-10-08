@@ -270,6 +270,12 @@ void parent_handler(pid_t child_pid)
             break;
         }
 
+        if (strncmp(rx_data.fields.data, "error: ", 7) == 0)
+        {
+            printf("[PARENT] Error with query: %s.\n", rx_data.fields.data+7);
+            continue;
+        }
+
         printf("[PARENT] Received update from Controller. Sensor: pid=%d, name='%s', threshold=%d, reading=%d\n",
                 rx_data.fields.pid, rx_data.fields.name, rx_data.fields.threshold, rx_data.fields.sensor_reading);
     }

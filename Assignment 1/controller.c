@@ -199,12 +199,63 @@ void child_handler(void)
             int device_index = get_device_index(device_pid, devices, MAX_DEVICES);
             if (device_index == -1)
             {
-                printf("[CHILD] Device with PID=%d does not exist.\n", device_pid);
+                memset((void *)&tx_data, 0, sizeof(tx_data));
+                printf("[CHILD] Query error: Device with PID=%d does not exist.\n", device_pid);
+                char *error_format = "error: Device with PID=%d does not exist";
+                char error_string[64];
+                sprintf(error_string, error_format, device_pid);
+                strncpy(tx_data.fields.data, error_string, sizeof(tx_data.fields.data));
+
+                printf("[CHILD] Sending error message to Parent process.\n");
+                tx_data.type = ppid;
+
+                if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+                {
+                    fprintf(stderr, "[CHILD] msgsnd failed\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                // Raise signal for parent process
+                kill(ppid, SIGUSR1);
             }
             else
             {
-                // Constructs and sends the query to device
                 memset((void *)&tx_data, 0, sizeof(tx_data));
+                int device_type = rx_data.fields.device_type;
+                if (devices[device_index].device_type != device_type)
+                {
+                    if (device_type == DEVICE_TYPE_SENSOR)
+                    {
+                        printf("[CHILD] Query error: Device with PID=%d is not a Sensor.\n", device_pid);
+                        char *error_format = "error: Device with PID=%d is not a Sensor";
+                        char error_string[64];
+                        sprintf(error_string, error_format, device_pid);
+                        strncpy(tx_data.fields.data, error_string, sizeof(tx_data.fields.data));
+                    }
+                    else
+                    {
+                        printf("[CHILD] Query error: Device with PID=%d is not an Actuator.\n", device_pid);
+                        char *error_format = "error: Device with PID=%d is not an Actuator";
+                        char error_string[64];
+                        sprintf(error_string, error_format, device_pid);
+                        strncpy(tx_data.fields.data, error_string, sizeof(tx_data.fields.data));
+                    }
+                    printf("[CHILD] Sending error message to Parent process.\n");
+                    tx_data.type = ppid;
+
+                    if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+                    {
+                        fprintf(stderr, "[CHILD] msgsnd failed\n");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    // Raise signal for parent process
+                    kill(ppid, SIGUSR1);
+
+                    continue;
+                }
+
+                // Constructs and sends the query to device
                 tx_data.type = device_pid;
                 strncpy(tx_data.fields.data, rx_data.fields.data, sizeof(tx_data.fields.data));
 
@@ -217,7 +268,7 @@ void child_handler(void)
                     // Threshold field is multiplexed with sequece number
                     tx_data.fields.threshold = sequence_number;
                     printf("[CHILD] Sending command to Actuator with PID=%d and Sequence#=%d\n",
-                    device_pid, sequence_number++);
+                            device_pid, sequence_number++);
                 }
 
                 if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
@@ -519,15 +570,23 @@ void parent_handler(void)
                 continue;
             }
 
-            printf("[PARENT] Received update from child. Sensor: pid=%d, threshold=%d, reading=%d, command='%s'\n",
-                    rx_data.fields.pid, rx_data.fields.threshold, rx_data.fields.sensor_reading, rx_data.fields.data);
-
             // Constructs and sends update to Cloud process
             memset((void *)&tx_data, 0, sizeof(tx_data));
-            strncpy(tx_data.fields.name, rx_data.fields.name, sizeof(tx_data.fields.name));
-            tx_data.fields.threshold = rx_data.fields.threshold;
-            tx_data.fields.sensor_reading = rx_data.fields.sensor_reading;
-            tx_data.fields.pid = rx_data.fields.pid;
+
+            if (strncmp(rx_data.fields.data, "error:", 6) == 0)
+            {
+                printf("[PARENT] Received query error from Child. Forwarding to Cloud.\n");
+                strncpy(tx_data.fields.data, rx_data.fields.data, sizeof(tx_data.fields.data));
+            }
+            else
+            {
+                strncpy(tx_data.fields.name, rx_data.fields.name, sizeof(tx_data.fields.name));
+                tx_data.fields.threshold = rx_data.fields.threshold;
+                tx_data.fields.sensor_reading = rx_data.fields.sensor_reading;
+                tx_data.fields.pid = rx_data.fields.pid;
+                printf("[PARENT] Received update from Child. Sensor: pid=%d, threshold=%d, reading=%d, command='%s'\n",
+                        rx_data.fields.pid, rx_data.fields.threshold, rx_data.fields.sensor_reading, rx_data.fields.data);
+            }
 
             if (write(fifo_fd_wr, (void *)&tx_data, tx_data_size) == -1)
             {
@@ -557,6 +616,7 @@ void parent_handler(void)
         memset((void *)&tx_data, 0, tx_data_size);
         tx_data.type = TO_CONTROLLER;
         tx_data.fields.pid = pid;
+        tx_data.fields.device_type = rx_data.fields.device_type;
         // Threshold multiplexed with pid of device to be queried
         tx_data.fields.threshold = rx_data.fields.pid;
         strncpy(tx_data.fields.data, rx_data.fields.data, sizeof(tx_data.fields.data));
