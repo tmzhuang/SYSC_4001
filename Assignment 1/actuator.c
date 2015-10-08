@@ -96,8 +96,8 @@ int main(int argc, char* argv[])
         gettimeofday(&t2, NULL);
 
         // Compare current time to previously noted time and enter block
-        // if the time difference is greater or equal than 2 seconds
-        if ((t2.tv_sec - t1.tv_sec) >= 2)
+        // if the time difference is greater or equal than 1 second
+        if ((t2.tv_sec - t1.tv_sec) >= 1)
         {
 
             if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
@@ -107,7 +107,7 @@ int main(int argc, char* argv[])
                 exit(EXIT_FAILURE);
             }
 
-            // If a stop messge is received, stop the device
+            // If a stop message is received, stop the device
             if (strncmp(rx_data.fields.data, "stop", 4) == 0)
             {
                 printf("Received stop command from Controller. Stopping device.\n");

@@ -208,7 +208,18 @@ void child_handler(void)
                 tx_data.type = device_pid;
                 strncpy(tx_data.fields.data, rx_data.fields.data, sizeof(tx_data.fields.data));
 
-                printf("[CHILD] Sending query to Device with PID=%d.\n", device_pid);
+                if (rx_data.fields.device_type == DEVICE_TYPE_SENSOR)
+                {
+                    printf("[CHILD] Sending query to Sensor with PID=%d.\n", device_pid);
+                }
+                else
+                {
+                    // Threshold field is multiplexed with sequece number
+                    tx_data.fields.threshold = sequence_number;
+                    printf("[CHILD] Sending command to Actuator with PID=%d and Sequence#=%d\n",
+                    device_pid, sequence_number++);
+                }
+
                 if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
                 {
                     fprintf(stderr, "[CHILD] msgsnd failed\n");
@@ -317,6 +328,7 @@ void child_handler(void)
             printf("[CHILD] Received reading of %d from PID=%d\n", rx_data.fields.sensor_reading, rx_data.fields.pid);
         }
 
+        // Check if Sensor reading is above threshold
         if (rx_data.fields.sensor_reading >= devices[received_device_index].threshold)
         {
             // Find index of mapped Actuator
