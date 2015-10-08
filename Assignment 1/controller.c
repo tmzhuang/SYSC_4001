@@ -388,21 +388,22 @@ void child_handler(void)
             if (actuator_index == -1)
             {
                 printf("[CHILD] This Sensor is not currently mapped to any Actuators.\n");
-                continue;
             }
-
-            // Constructs and sends a command message to an actuator
-            memset((void *)&tx_data, 0, sizeof(tx_data));
-            tx_data.type = devices[actuator_index].pid;
-            tx_data.fields.threshold = sequence_number; // Threshold field multiplex as sequence number
-            strncpy(tx_data.fields.data, "turn off", sizeof(tx_data.fields.data));
-
-            printf("[CHILD] Sending command to Actuator with PID=%d and Sequence#=%d\n",
-                    (int)tx_data.type, sequence_number++);
-            if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+            else
             {
-                fprintf(stderr, "[CHILD] msgsnd failed\n");
-                exit(EXIT_FAILURE);
+                // Constructs and sends a command message to an actuator
+                memset((void *)&tx_data, 0, sizeof(tx_data));
+                tx_data.type = devices[actuator_index].pid;
+                tx_data.fields.threshold = sequence_number; // Threshold field multiplex as sequence number
+                strncpy(tx_data.fields.data, "turn off", sizeof(tx_data.fields.data));
+
+                printf("[CHILD] Sending command to Actuator with PID=%d and Sequence#=%d\n",
+                        (int)tx_data.type, sequence_number++);
+                if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+                {
+                    fprintf(stderr, "[CHILD] msgsnd failed\n");
+                    exit(EXIT_FAILURE);
+                }
             }
 
             // Constructs and sends an update message to the parent
