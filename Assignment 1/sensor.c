@@ -132,7 +132,7 @@ int main(int argc, char* argv[])
             if (sensor_reading >= threshold)
             {
                 printf("Sensor reading exceeded THRESHOLD(%d)!\n", threshold);
-                running = 0;
+                //running = 0;
             }
 
             // Constructs and sends update message to controller
@@ -147,31 +147,49 @@ int main(int argc, char* argv[])
                 exit(EXIT_FAILURE);
             }
 
-            // Poll for stop message
-            int result = msgrcv(msgid, (void *)&rx_data, rx_data_size,
-                        pid, IPC_NOWAIT);
-            if (result == -1)
-            {
-                // Error code ENOMSG(42) corresponds to no message received
-                if (errno != ENOMSG)
-                {
-                    fprintf(stderr, "msgrcv failed with error: %d\n", errno);
-                    exit(EXIT_FAILURE);
-                }
-            }
-            else if (result > 0)
-            {
-                // If a stop messge is received, stop the device
-                if (strncmp(rx_data.fields.data, "stop", 3) == 0)
-                {
-                    printf("Received stop command from Controller. Stopping device.\n");
-                    break;
-                }
-            }
-
             // Make note of current time
             gettimeofday(&t1, NULL);
         }
+
+        // Poll for stop message
+        int result = msgrcv(msgid, (void *)&rx_data, rx_data_size,
+                pid, IPC_NOWAIT);
+        if (result == -1)
+        {
+            // Error code ENOMSG(42) corresponds to no message received
+            if (errno != ENOMSG)
+            {
+                fprintf(stderr, "msgrcv failed with error: %d\n", errno);
+                exit(EXIT_FAILURE);
+            }
+        }
+        else if (result > 0)
+        {
+            // If a stop messge is received, stop the device
+            if (strncmp(rx_data.fields.data, "stop", 3) == 0)
+            {
+                printf("Received stop command from Controller. Stopping device.\n");
+                break;
+            }
+            // If a query message is received, respond
+            else
+            {
+                // Constructs and sends update message to controller
+                memset((void *)&tx_data, 0, sizeof(tx_data));
+                tx_data.type = TO_CONTROLLER;
+                tx_data.fields.sensor_reading = sensor_reading;
+                tx_data.fields.pid = pid;
+                strncpy(tx_data.fields.data, "query", sizeof(tx_data.fields.data));
+
+                if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+                {
+                    fprintf(stderr, "msgsnd failed\n");
+                    exit(EXIT_FAILURE);
+                }
+
+            }
+        }
+
     }
 
     exit(EXIT_SUCCESS);

@@ -178,6 +178,7 @@ void child_handler(void)
     while (!g_program_done_flag)
     {
         // Block until a message is received
+        memset((void *)&rx_data, 0, sizeof(rx_data));
         if (msgrcv(msgid, (void *)&rx_data, rx_data_size,
                     TO_CONTROLLER, IPC_NOWAIT) == -1)
         {
@@ -185,6 +186,34 @@ void child_handler(void)
             {
                 fprintf(stderr, "PID=%d [CHILD] msgrcv failed with error: %d\n", pid, errno);
                 exit(EXIT_FAILURE);
+            }
+            continue;
+        }
+
+        // If received query from Parent
+        if (rx_data.fields.pid == ppid)
+        {
+            printf("[CHILD] Received query from Parent.\n");
+
+            pid_t device_pid = (pid_t)rx_data.fields.threshold;
+            int device_index = get_device_index(device_pid, devices, MAX_DEVICES);
+            if (device_index == -1)
+            {
+                printf("[CHILD] Device with PID=%d does not exist.\n", device_pid);
+            }
+            else
+            {
+                // Constructs and sends the query to device
+                memset((void *)&tx_data, 0, sizeof(tx_data));
+                tx_data.type = device_pid;
+                strncpy(tx_data.fields.data, rx_data.fields.data, sizeof(tx_data.fields.data));
+
+                printf("[CHILD] Sending query to Device with PID=%d.\n", device_pid);
+                if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+                {
+                    fprintf(stderr, "[CHILD] msgsnd failed\n");
+                    exit(EXIT_FAILURE);
+                }
             }
             continue;
         }
@@ -250,6 +279,29 @@ void child_handler(void)
             }
 
             continue;
+        }
+
+        // Check if the message is a response to a query
+        if (strncmp(rx_data.fields.data, "query", 5) == 0)
+        {
+            // Constructs and sends an query response to the parent
+            memset((void *)&tx_data, 0, sizeof(tx_data));
+            tx_data.type = ppid;
+            strncpy(tx_data.fields.name, devices[received_device_index].name, sizeof(tx_data.fields.name));
+            tx_data.fields.threshold = devices[received_device_index].threshold;
+            tx_data.fields.sensor_reading = rx_data.fields.sensor_reading;
+            tx_data.fields.pid = rx_data.fields.pid;
+            strncpy(tx_data.fields.data, "query", sizeof(tx_data.fields.data));
+
+            printf("[CHILD] Sending response to query to parent\n");
+            if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+            {
+                fprintf(stderr, "[CHILD] msgsnd failed\n");
+                exit(EXIT_FAILURE);
+            }
+
+            // Raise signal for parent process
+            kill(ppid, SIGUSR1);
         }
 
         // Threshold field is being multiplexed as sequence number
@@ -487,9 +539,23 @@ void parent_handler(void)
             //fprintf(stderr, "%s", strerror(errno));
             continue;
         }
+        printf("[PARENT] Received query from Cloud process.\n");
 
-        // TODO: Notify child process
-        printf("[PARENT] Received message '%s' from Cloud process.\n", rx_data.fields.data);
+        // Notify child process
+        memset((void *)&tx_data, 0, tx_data_size);
+        tx_data.type = TO_CONTROLLER;
+        tx_data.fields.pid = pid;
+        // Threshold multiplexed with pid of device to be queried
+        tx_data.fields.threshold = rx_data.fields.pid;
+        strncpy(tx_data.fields.data, rx_data.fields.data, sizeof(tx_data.fields.data));
+
+        printf("[PARENT] Sending query to Child process.\n");
+        if (msgsnd(msgid, (void *)&tx_data, tx_data_size, 0) == -1)
+        {
+            fprintf(stderr, "[PARENT] msgsnd failed\n");
+            exit(EXIT_FAILURE);
+        }
+
     }
 
     // Constructs and sends stop command to Cloud process
